@@ -1,6 +1,6 @@
-#**Customer Churn Prediction**
+#Customer Churn Prediction
 
-![Customer Churn Banner](assets/churn-banner.png)
+![Customer Churn Banner](assets/churn-banner.jng)
 
 📌** Project Overview**
 
@@ -19,3 +19,4 @@ Build a robust binary classification model.
 **Dataset**
 
 Dataset Used: Telco Customer Churn
+
