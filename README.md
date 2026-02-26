@@ -1,8 +1,8 @@
-#Customer Churn Prediction
+# Customer Churn Prediction
 
 ![Customer Churn Banner](assets/churn-banner.jng)
 
-📌** Project Overview**
+📌**Project Overview**
 
 Customer churn is one of the biggest challenges in the telecom industry. Retaining existing customers is significantly more cost-effective than acquiring new ones.
 
