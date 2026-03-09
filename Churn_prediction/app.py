@@ -1,29 +1,16 @@
 from flask import Flask, render_template, request, jsonify
-import pickle
 import numpy as np
-import json
 import os
 import joblib
+
 app = Flask(__name__)
-'''
-# Load model
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'lgbm_model.pkl')
+
+# Load model using absolute path relative to this file
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models', 'lgbm_model.pkl')
 model = None
 
-def load_model():
-    global model
-    try:
-        with open(MODEL_PATH, 'rb') as f:
-            model = pickle.load(f)
-        print("Model loaded successfully")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        model = None
-load_model()
-'''
-# Load model
 try:
-    model = joblib.load("models/lgbm_model.pkl")
+    model = joblib.load(MODEL_PATH)
     print("Model loaded successfully")
 except Exception as e:
     print(f"Error loading model: {e}")
@@ -38,11 +25,11 @@ FEATURE_NAMES = [
     'MonthlyCharges', 'TotalCharges'
 ]
 
+
 def encode_features(data):
     """Encode categorical features to numeric."""
     gender_map = {'Male': 1, 'Female': 0}
     yes_no_map = {'Yes': 1, 'No': 0}
-    
     internet_service_map = {'DSL': 0, 'Fiber optic': 1, 'No': 2}
     multiple_lines_map = {'No phone service': 0, 'No': 1, 'Yes': 2}
     online_map = {'No internet service': 0, 'No': 1, 'Yes': 2}
@@ -77,26 +64,6 @@ def encode_features(data):
     ]
     return features
 
-def get_shap_values(features_array):
-    """Get SHAP-like feature contributions using model's predict with perturbation."""
-    try:
-        import shap
-        explainer = shap.TreeExplainer(model)
-        shap_vals = explainer.shap_values(features_array)
-        if isinstance(shap_vals, list):
-            return shap_vals[1][0].tolist(), float(explainer.expected_value[1])
-        return shap_vals[0].tolist(), float(explainer.expected_value)
-    except Exception:
-        # Fallback: approximate contributions
-        base_pred = model.predict_proba(features_array)[0][1]
-        contributions = []
-        for i in range(len(features_array[0])):
-            perturbed = features_array.copy()
-            perturbed[0][i] = 0
-            perturbed_pred = model.predict_proba(perturbed)[0][1]
-            contributions.append(float(base_pred - perturbed_pred))
-        return contributions, 0.5
-
 
 @app.route('/')
 def index():
@@ -105,49 +72,31 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    if model is None:
+        return jsonify({'error': 'Model not loaded. Please ensure lgbm_model.pkl is placed in the models/ folder.'}), 503
+
     try:
         data = request.get_json()
         features = encode_features(data)
         features_array = np.array([features])
 
-        if model is None:
-            return jsonify({'error': 'Model not loaded'}), 500
+        prob = float(model.predict_proba(features_array)[0][1])
 
-        prob = model.predict_proba(features_array)[0][1]
-        churn_prob = float(prob) * 100
+        prediction = 'Churn' if prob > 0.5 else 'No Churn'
+        confidence = f'{round(abs(prob - 0.5) * 200, 1)}%'
 
-        if churn_prob < 30:
-            risk_level = 'Low'
-            risk_color = '#22c55e'
-        elif churn_prob < 60:
-            risk_level = 'Medium'
-            risk_color = '#f59e0b'
+        if prob > 0.7:
+            risk_level = 'High Risk'
+        elif prob >= 0.4:
+            risk_level = 'Medium Risk'
         else:
-            risk_level = 'High'
-            risk_color = '#ef4444'
-
-        confidence = abs(churn_prob - 50) * 2
-
-        # SHAP values
-        try:
-            shap_contributions, base_value = get_shap_values(features_array)
-        except Exception:
-            shap_contributions = [0.0] * len(FEATURE_NAMES)
-            base_value = 0.5
-
-        feature_importance = [
-            {'feature': FEATURE_NAMES[i], 'value': float(features[i]), 'contribution': shap_contributions[i]}
-            for i in range(len(FEATURE_NAMES))
-        ]
-        feature_importance.sort(key=lambda x: abs(x['contribution']), reverse=True)
+            risk_level = 'Low Risk'
 
         return jsonify({
-            'churn_probability': round(churn_prob, 1),
+            'prediction': prediction,
+            'probability': round(prob, 4),
+            'confidence': confidence,
             'risk_level': risk_level,
-            'risk_color': risk_color,
-            'confidence': round(confidence, 1),
-            'feature_importance': feature_importance[:10],
-            'base_value': base_value,
         })
 
     except Exception as e:
@@ -155,4 +104,4 @@ def predict():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
